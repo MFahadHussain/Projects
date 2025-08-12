@@ -1,0 +1,355 @@
+<!doctype html>
+<html>
+<head>
+  <title>Face Recognition Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f7fa;
+      color: #333;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: linear-gradient(135deg, #1a2a6c, #2c3e50);
+      color: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 2.5em;
+    }
+    .header p {
+      margin: 10px 0 0;
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+    .dashboard {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-gap: 20px;
+    }
+    .panel {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .panel h2 {
+      margin-top: 0;
+      color: #2c3e50;
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 10px;
+    }
+    .video-container {
+      position: relative;
+      width: 100%;
+      padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+      height: 0;
+      overflow: hidden;
+      border-radius: 8px;
+      background: #000;
+    }
+    .video-container video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .status-live {
+      background-color: #2ecc71;
+      box-shadow: 0 0 8px #2ecc71;
+      animation: pulse 1.5s infinite;
+    }
+    .status-offline {
+      background-color: #e74c3c;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(46, 204, 113, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #e1e1e1;
+    }
+    th {
+      background-color: #f8f9fa;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+    tr:hover {
+      background-color: #f8f9fa;
+    }
+    .face-gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      grid-gap: 15px;
+      margin-top: 15px;
+    }
+    .face-item {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease;
+    }
+    .face-item:hover {
+      transform: scale(1.05);
+    }
+    .face-item img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      display: block;
+    }
+    .face-item .label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 5px;
+      font-size: 0.8em;
+      text-align: center;
+    }
+    .detection-feed {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 15px;
+    }
+    .detection-item {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .detection-item img {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-right: 15px;
+    }
+    .detection-info {
+      flex-grow: 1;
+    }
+    .detection-name {
+      font-weight: bold;
+      margin-bottom: 3px;
+    }
+    .detection-time {
+      font-size: 0.8em;
+      color: #777;
+    }
+    .detection-type {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.7em;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .type-known {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .type-unknown {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .full-width {
+      grid-column: 1 / -1;
+    }
+    .refresh-btn {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      margin-top: 10px;
+      transition: background-color 0.3s;
+    }
+    .refresh-btn:hover {
+      background-color: #2980b9;
+    }
+  </style>
+  <script>
+    function updateLiveFeed() {
+      const img = document.getElementById('live-feed');
+      if (img) {
+        img.src = '/video_feed?' + new Date().getTime();
+      }
+    }
+    
+    function updateDetections() {
+      fetch('/detections')
+        .then(response => response.json())
+        .then(data => {
+          const container = document.getElementById('detection-feed');
+          container.innerHTML = '';
+          
+          if (data.length === 0) {
+            container.innerHTML = '<p>No recent detections</p>';
+            return;
+          }
+          
+          data.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'detection-item';
+            
+            const img = document.createElement('img');
+            if (item.type === 'known') {
+              img.src = '/known/' + item.name + '.jpg';
+            } else {
+              img.src = item.path;
+            }
+            
+            const info = document.createElement('div');
+            info.className = 'detection-info';
+            
+            const name = document.createElement('div');
+            name.className = 'detection-name';
+            name.textContent = item.type === 'known' ? item.name : 'Unknown Face';
+            
+            const time = document.createElement('div');
+            time.className = 'detection-time';
+            time.textContent = new Date(item.timestamp * 1000).toLocaleTimeString();
+            
+            const type = document.createElement('span');
+            type.className = 'detection-type type-' + item.type;
+            type.textContent = item.type;
+            
+            info.appendChild(name);
+            info.appendChild(time);
+            info.appendChild(type);
+            
+            div.appendChild(img);
+            div.appendChild(info);
+            container.appendChild(div);
+          });
+        })
+        .catch(error => console.error('Error updating detections:', error));
+    }
+    
+    // Update live feed every second
+    setInterval(updateLiveFeed, 1000);
+    
+    // Update detections every 5 seconds
+    setInterval(updateDetections, 5000);
+    
+    // Initial load
+    document.addEventListener('DOMContentLoaded', function() {
+      updateLiveFeed();
+      updateDetections();
+    });
+  </script>
+</head>
+<body>
+  <div class="header">
+    <h1>Face Recognition Dashboard</h1>
+    <p>Real-time monitoring and attendance tracking system</p>
+  </div>
+  
+  <div class="dashboard">
+    <div class="panel">
+      <h2>
+        <span class="status-indicator status-live"></span>
+        Live Video Feed
+      </h2>
+      <div class="video-container">
+        <img id="live-feed" src="/video_feed" alt="Live Feed">
+      </div>
+    </div>
+    
+    <div class="panel">
+      <h2>Recent Detections</h2>
+      <div id="detection-feed" class="detection-feed">
+        <p>Loading detections...</p>
+      </div>
+      <button class="refresh-btn" onclick="updateDetections()">Refresh Detections</button>
+    </div>
+    
+    <div class="panel">
+      <h2>Attendance Records</h2>
+      <table>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Timestamp</th>
+        </tr>
+        {% for row in attendance %}
+          <tr>
+            <td>{{row[0]}}</td>
+            <td>{{row[1]}}</td>
+            <td>{{row[2]}}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+    
+    <div class="panel">
+      <h2>Activity Log</h2>
+      <table>
+        <tr>
+          <th>Time</th>
+          <th>Event</th>
+        </tr>
+        {% for row in activity %}
+          <tr>
+            <td>{{row[1]}}</td>
+            <td>{{row[0]}}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+    
+    <div class="panel full-width">
+      <h2>Known Faces</h2>
+      <div class="face-gallery">
+        {% for name in known_faces %}
+          <div class="face-item">
+            <img src="/known/{{name}}.jpg" alt="{{name}}">
+            <div class="label">{{name}}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    
+    <div class="panel full-width">
+      <h2>Unknown Faces</h2>
+      <div class="face-gallery">
+        {% for f in unknown_faces %}
+          <div class="face-item">
+            <img src="/unknown/{{f}}" alt="Unknown Face">
+            <div class="label">Unknown</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
