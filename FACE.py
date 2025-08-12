@@ -1,3 +1,6 @@
+#pip install ultralytics insightface flask-socketio eventlet opencv-python-headless
+
+
 import cv2
 import numpy as np
 import os
